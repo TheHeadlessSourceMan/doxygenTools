@@ -5,7 +5,7 @@ import typing
 import os
 from pathlib import Path
 from k_runner import OsRun,OsRunJob
-from doxyFile import createDoxyFile
+from doxygenTools.doxyFile import createDoxyFile
 
 
 FDOX_DEFAULT_DIRECTORY=os.environ.get('FDOX_DEFAULT_DIRECTORY','.')
@@ -28,7 +28,7 @@ def fdox(
     doxyFile=createDoxyFile(directory)
     directory=doxyFile.parent
     if addDoxygenStuffToGitIgnore:
-        from gitignore import Gitignore
+        from doxygenTools.gitignore import Gitignore
         gitignore=Gitignore(directory,errorOnFileNotFound=False)
         gitignore.add('Doxyfile')
         gitignore.add('doxygen/*')

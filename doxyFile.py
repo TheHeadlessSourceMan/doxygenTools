@@ -33,7 +33,7 @@ from pathlib import Path
 import k_runner.osrun as osrun
 from k_runner import ApplicationCallbacks
 from paths import URL,Url,UrlCompatible,asUrl
-from util import findDoxygenInputDirs
+from doxygenTools.util import findDoxygenInputDirs
 
 
 class DoxyfileSetting:
@@ -135,7 +135,7 @@ class DoxyFile:
         """
         self.autosave=autosave
         self.autoCreate=autoCreate
-        self.filename=Path(filename)
+        self.filename=Url(filename)
         self._dirty=False
         self._lines:typing.List[str]=[]
         self._settings:typing.Optional[typing.Dict[str,DoxyfileSetting]]=None
@@ -230,11 +230,11 @@ class DoxyFile:
         if ret.is_file():
             return ret
         # not found exact match, so search in source sub-directories
-        rr=ret.rsplit(os.sep,1)
+        rr=str(ret).rsplit(os.sep,1)
         rr[1]=f'_2{rr[1]}' # where _2 is the subdirectory separator
         for filename in os.listdir(rr[0]):
             if filename.endswith(rr[1]):
-                return os.sep.join((rr[0],filename))
+                return Path(rr[0])/filename
         raise FileNotFoundError(f'File not found:\n\t{ret}')
 
     def doxygenUrl(self,
@@ -272,12 +272,12 @@ class DoxyFile:
                     break
             if t:
                 if t[0]=='#':
-                    htmlFilename=htmlFilename+t
+                    htmlFilename=str(htmlFilename)+t
                 else:
                     htmlFilename=os.sep.join((
-                        htmlFilename.rsplit(os.sep,1)[0],
+                        str(htmlFilename).rsplit(os.sep,1)[0],
                         t))
-        if os.sep!='/':
+        if isinstance(htmlFilename,str) and os.sep!='/':
             htmlFilename=htmlFilename.replace(os.sep,'/')
         return Url(f'file:///{htmlFilename}')
 
@@ -330,9 +330,8 @@ class DoxyFile:
         The associated make command
         """
         if self._makeCommand is None:
-            filename=os.path.abspath(os.path.expandvars(self.filename))
-            ff=filename.rsplit(os.sep,1)
-            self._makeCommand=['doxygen',ff[1]]
+            directory=self.filename.dirPath
+            self._makeCommand=['doxygen',directory]
         return self._makeCommand
     @makeCommand.setter
     def makeCommand(self,makeCommand:typing.Union[str,typing.List[str]])->None:
@@ -344,9 +343,7 @@ class DoxyFile:
         Make a directory exist
         """
         if self._makeDirectory is None:
-            filename=os.path.abspath(os.path.expandvars(self.filename))
-            ff=filename.rsplit(os.sep,1)
-            self._makeDirectory=ff[0]
+            self._makeDirectory=self.filename.dirPath
         return self._makeDirectory
     @makeDirectory.setter
     def makeDirectory(self,
@@ -361,8 +358,7 @@ class DoxyFile:
         Just specify autoCreate and it will do this when
         it tries to load.
         """
-        filename=os.path.expandvars(self.filename)
-        cmd=['doxygen','-g',filename]
+        cmd=['doxygen','-g',str(self.filename)]
         results=osrun.run(cmd)
         if results.stderr:
             raise Exception(results.stdouterr)
@@ -409,14 +405,13 @@ class DoxyFile:
 
         No need to call directly.  Will load on first use.
         """
-        self.filename=filename
+        self.filename=Url(filename)
         lastsection=[]
         section:typing.List[str]=[]
         self._settings={}
-        filename=os.path.expandvars(filename)
-        if self.autoCreate and not os.path.exists(filename):
+        if self.autoCreate and not self.filename.isFile:
             self.create()
-        data=filename.read_text('utf-8',errors='ignore')
+        data=self.filename.readString()
         self._lines=[line.strip() for line in data.split('\n')]
         for lineNo,line in enumerate(self._lines):
             if not line:
@@ -436,16 +431,16 @@ class DoxyFile:
                         lineNo,cols[0],cols[1],'\n'.join(lastsection))
                     self._settings[setting.name]=setting
 
-    def save(self,filename:typing.Union[None,str,Path]=None)->None:
+    def save(self,filename:typing.Optional[UrlCompatible]=None)->None:
         """
         save a doxyfile
         """
         if filename is None:
             filename=self.filename
+        else:
+            filename=Url(filename)
         data='\n'.join(self._lines)
-        with open(os.path.expandvars(filename),'w',encoding="utf-8") as f:
-            f.write(data)
-            f.flush()
+        filename.writeString(data)
         self._dirty=False
 
     @property
