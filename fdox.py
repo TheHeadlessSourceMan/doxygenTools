@@ -34,7 +34,10 @@ def fdox(
         gitignore.add('doxygen/*')
         gitignore.save()
     cmd=['doxygen',doxyFile]
-    os.makedirs(directory/'doxygen')
+    try:
+        os.makedirs(directory/'doxygen')
+    except FileExistsError:
+        pass
     instance=OsRun(cmd,detach=True,workingDirectory=directory)
     job=instance.runAsync()
     return job
