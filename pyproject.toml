@@ -1,0 +1,19 @@
+[project]
+name="doxygenTools"
+version="1.0.0.0"
+description = "Tools for handling doxygen documentation"
+readme="README.md"
+requires-python = ">= 3.8"
+authors = [{name = "KC Eilander"}]
+license = "MIT"
+license-files = ["LICENSE"]
+keywords=[]
+
+[project.urls]
+Homepage = "https://github.com/TheHeadlessSourceMan/todoPlugins"
+
+[project.entry-points."codeTools.plugin"]
+doxygenToolsPlugin='doxygenTools:Doxygen'
+
+[project.entry-points."codeTools.sourceDocumentor.plugin"]
+doxygenToolsPlugin='doxygenTools:Doxygen'
