@@ -2,7 +2,8 @@
 General useful tools
 """
 import typing
-from pathlib import Path
+
+from paths import Url,UrlCompatible,UrlListCompatible,asUrl,toUrlList
 
 
 SOURCE_EXTENSIONS=[
@@ -14,39 +15,36 @@ SOURCE_EXTENSIONS=[
     '.f95','.f03','.f08','.f18','.f','.for','.vhd','.vhdl','.ucf','.qsf','.ice']
 
 
-def containsSource(directory:typing.Union[str,Path])->bool:
+def containsSource(directory:UrlCompatible)->bool:
     """
     Determine if a directory contains source code
     """
-    if not isinstance(directory,Path):
-        directory=Path(directory)
+    directory=asUrl(directory)
     for file in directory.iterdir():
-        if file.suffix.lower() in SOURCE_EXTENSIONS:
+        if file.ext.lower() in SOURCE_EXTENSIONS:
             return True
     return False
 
 
-def subdirectories(directory:typing.Union[str,Path])->typing.Generator[Path,None,None]:
+def subdirectories(directory:UrlCompatible
+    )->typing.Generator[Url,None,None]:
     """
     Get all subdirectories of a certain directory
     """
-    if not isinstance(directory,Path):
-        directory=Path(directory)
+    directory=asUrl(directory)
     for file in directory.iterdir():
-        if file.is_dir():
+        if file.isDir:
             yield file
 
 
 def findDoxygenInputDirs(
-    startingDirectories:typing.Union[str,Path,typing.Iterable[typing.Union[str,Path]]]='.'
-    )->typing.Generator[Path,None,None]:
+    startingDirectories:UrlListCompatible='.'
+    )->typing.Generator[Url,None,None]:
     """
     Find all doxygen input dirs, that is,
     topmost directories containing source code.
     """
-    if isinstance(startingDirectories,(str,Path)):
-        startingDirectories=[startingDirectories]
-    tape:typing.List[Path]=[Path(path).absolute() for path in startingDirectories]
+    tape=list(toUrlList(startingDirectories))
     for directory in tape:
         if containsSource(directory):
             yield directory

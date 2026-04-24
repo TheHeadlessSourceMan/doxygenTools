@@ -2,8 +2,8 @@
 Doxygen information about a source file
 """
 import typing
-from pathlib import Path
 import xml.etree.ElementTree as ET
+from paths import Url,UrlCompatible
 if typing.TYPE_CHECKING:
     from .doxygenInfo import DoxygenInfo
     from .doxygenFunctionInfo import DoxygenFunctionInfo
@@ -16,13 +16,13 @@ class DoxygenFileInfo:
     def __init__(self,
         root:"DoxygenInfo",
         name:str,
-        xmlFilename:Path):
+        xmlFilename:UrlCompatible):
         """ """
         self.root=root
         self.name=name
         self.functions:typing.Dict[str,DoxygenFunctionInfo]={}
         self._xml:typing.Optional[ET.Element]=None
-        self.xmlFilename=xmlFilename
+        self.xmlFilename:Url=Url(xmlFilename)
 
     @property
     def xml(self)->ET.Element:
@@ -31,7 +31,7 @@ class DoxygenFileInfo:
         """
         if self._xml is None:
             try:
-                s=self.xmlFilename.read_text('utf-8',errors='ignore')
+                s=self.xmlFilename.readString()
                 self._xml=ET.fromstring(s)
             except FileNotFoundError:
                 print(f'ERR: "{self.xmlFilename}" not found')

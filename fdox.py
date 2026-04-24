@@ -3,8 +3,8 @@ Fast doxygen of directory
 """
 import typing
 import os
-from pathlib import Path
 from k_runner import OsRun,OsRunJob
+from paths import UrlCompatible,asUrl
 from doxygenTools.doxyFile import createDoxyFile
 
 
@@ -12,7 +12,7 @@ FDOX_DEFAULT_DIRECTORY=os.environ.get('FDOX_DEFAULT_DIRECTORY','.')
 
 
 def fdox(
-    directory:typing.Union[str,Path,None]=None,
+    directory:typing.Optional[UrlCompatible]=None,
     addDoxygenStuffToGitIgnore:bool=True
     )->OsRunJob:
     """
@@ -22,8 +22,8 @@ def fdox(
     """
     if directory is None:
         directory=FDOX_DEFAULT_DIRECTORY
-    directory=Path(directory)
-    if not directory.exists():
+    directory=asUrl(directory)
+    if not directory.exists:
         raise FileNotFoundError(str(directory))
     doxyFile=createDoxyFile(directory)
     directory=doxyFile.parent
@@ -35,10 +35,10 @@ def fdox(
         gitignore.save()
     cmd=['doxygen',doxyFile]
     try:
-        os.makedirs(directory/'doxygen')
+        os.makedirs(str(directory/'doxygen'))
     except FileExistsError:
         pass
-    instance=OsRun(cmd,detach=True,workingDirectory=directory)
+    instance=OsRun(cmd,detach=True,workingDirectory=str(directory))
     job=instance.runAsync()
     return job
 

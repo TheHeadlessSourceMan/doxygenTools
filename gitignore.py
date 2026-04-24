@@ -2,9 +2,8 @@
 Manage a gitignore file
 """
 import typing
-from pathlib import Path
 import re
-from paths import globToRegex
+from paths import globToRegex,UrlCompatible,asUrl,Url
 
 
 GitignoreRule=re.Pattern
@@ -15,10 +14,10 @@ class Gitignore:
     Manage a gitignore file
     """
     def __init__(self,
-        fileOrDir:typing.Union[None,str,Path]=None,
+        fileOrDir:typing.Optional[UrlCompatible]=None,
         errorOnFileNotFound:bool=True):
         """ """
-        self.currentFile:typing.Optional[Path]=None
+        self.currentFile:typing.Optional[Url]=None
         self._rules:typing.List[GitignoreRule]=[]
         self._dataLines:typing.List[str]=[]
         self.hasChanged:bool=False
@@ -26,7 +25,7 @@ class Gitignore:
             self.load(fileOrDir,errorOnFileNotFound=errorOnFileNotFound)
 
     def load(self,
-        fileOrDir:typing.Union[None,str,Path]=None,
+        fileOrDir:typing.Optional[UrlCompatible]=None,
         addToExisting:bool=False,
         errorOnFileNotFound:bool=True):
         """
@@ -39,14 +38,13 @@ class Gitignore:
         if fileOrDir is None:
             fileOrDir=self.currentFile
             if fileOrDir is None:
-                fileOrDir=Path('.gitignore')
+                fileOrDir=asUrl('.gitignore')
         if not addToExisting:
             self._rules=[]
             self._dataLines=[]
         startedEmpty=not self._rules
-        if not isinstance(fileOrDir,Path):
-            fileOrDir=Path(fileOrDir)
-        if fileOrDir.is_dir():
+        fileOrDir=asUrl(fileOrDir)
+        if fileOrDir.isDir:
             fileOrDir=fileOrDir/'.gitignore'
         self.currentFile=fileOrDir
         if not fileOrDir.exists():
@@ -54,8 +52,7 @@ class Gitignore:
                 raise FileNotFoundError(str(fileOrDir))
             else:
                 return
-        data=fileOrDir.read_text(encoding='utf-8',errors='ignore').split('\n')
-        for line in data:
+        for line in fileOrDir.readLines():
             line=line.lstrip()
             if line and line[0]!='#':
                 self.addRule(line)
@@ -91,33 +88,31 @@ class Gitignore:
     remove=removeRule
 
     def save(self,
-        fileOrDir:typing.Union[None,str,Path]=None):
+        fileOrDir:typing.Optional[UrlCompatible]=None):
         """
         Save gitignore rules
         """
         if fileOrDir is None:
             fileOrDir=self.currentFile
             if fileOrDir is None:
-                fileOrDir=Path('.gitignore')
-        elif isinstance(fileOrDir,str):
-            fileOrDir=Path(fileOrDir)
-        if fileOrDir.is_dir():
+                fileOrDir=asUrl('.gitignore')
+        fileOrDir=asUrl(fileOrDir)
+        if fileOrDir.isDir:
             fileOrDir=fileOrDir/'.gitignore'
         if self.hasChanged or self.currentFile!=fileOrDir:
             self.currentFile=fileOrDir
-            fileOrDir.write_text('\n'.join(self._dataLines),encoding='utf-8',errors='ignore')
+            fileOrDir.writeString('\n'.join(self._dataLines))
             self.hasChanged=False
     saveAs=save
 
     def firstRuleMatch(self,
-        file:typing.Union[str,Path]
+        file:UrlCompatible
         )->typing.Optional[GitignoreRule]:
         """
         Return the first rule that matches a given file
         None, if none of the rules match
         """
-        if not isinstance(file,Path):
-            file=Path(file)
+        file=asUrl(file)
         here="."
         if self.currentFile is not None:
             here=self.currentFile.absolute().parent
@@ -129,14 +124,14 @@ class Gitignore:
     whichRuleMatched=firstRuleMatch
     whichRuleMatches=firstRuleMatch
 
-    def isIgnored(self,file:typing.Union[str,Path])->bool:
+    def isIgnored(self,file:UrlCompatible)->bool:
         """
         Check to see if a file is ignored or not
         """
         return self.whichRuleMatched(file) is not None
     ignored=isIgnored
 
-    def isNotIgnored(self,file:typing.Union[str,Path])->bool:
+    def isNotIgnored(self,file:UrlCompatible)->bool:
         """
         Determine if a file is not ignored by the gitignore
         """

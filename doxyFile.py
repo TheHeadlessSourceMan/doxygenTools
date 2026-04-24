@@ -29,7 +29,6 @@ See also:
 import typing
 import os
 import re
-from pathlib import Path
 import k_runner.osrun as osrun
 from k_runner import ApplicationCallbacks
 from paths import URL,Url,UrlCompatible,asUrl
@@ -122,7 +121,7 @@ class DoxyFile:
     """
 
     def __init__(self,
-        filename:typing.Union[str,Path]='Doxyfile',
+        filename:UrlCompatible='Doxyfile',
         autoCreate:bool=True,
         autosave:bool=True,
         makeCommand:typing.Union[None,str,typing.List[str]]=None,
@@ -153,12 +152,12 @@ class DoxyFile:
     URL=url
 
     @property
-    def doxygenBaseDir(self)->Path:
+    def doxygenBaseDir(self)->Url:
         """
         The base directory of the doxygen output directory
         """
         d=self.settings['OUTPUT_DIRECTORY'].value
-        d=Path(os.path.expandvars(d))
+        d=Url(os.path.expandvars(d))
         d=d/'html'
         return d.absolute()
 
@@ -193,7 +192,7 @@ class DoxyFile:
                 found.add(label)
 
     def doxygenTargets(self,
-        codeFilename:typing.Union[str,Path,None]=None
+        codeFilename:typing.Optional[UrlCompatible]=None
         )->typing.Generator[typing.Tuple[str,str],None,None]:
         """
         open the appropriate html for the codeFilename and find
@@ -207,8 +206,8 @@ class DoxyFile:
             yield from self._doxygenTargets(htmlFilename)
 
     def doxygenHtmlFilename(self,
-        codeFilename:typing.Union[None,str,Path]=None
-        )->typing.Optional[Path]:
+        codeFilename:typing.Optional[UrlCompatible]=None
+        )->typing.Optional[Url]:
         """
         Make an educated guess at the .html file that refers
         to the given code filename.
@@ -218,8 +217,7 @@ class DoxyFile:
         if codeFilename is None:
             htmlFilename='index.html'
         else:
-            if not isinstance(codeFilename,Path):
-                codeFilename=Path(codeFilename)
+            codeFilename=asUrl(codeFilename)
             codeFilename=codeFilename.name
             htmlFilename=codeFilename\
                 .replace('_','__')\
@@ -227,18 +225,18 @@ class DoxyFile:
                 .replace('\\','_2')\
                 .replace('.','_8')+'.html'
         ret=self.doxygenBaseDir/htmlFilename
-        if ret.is_file():
+        if ret.isFile:
             return ret
         # not found exact match, so search in source sub-directories
         rr=str(ret).rsplit(os.sep,1)
         rr[1]=f'_2{rr[1]}' # where _2 is the subdirectory separator
         for filename in os.listdir(rr[0]):
             if filename.endswith(rr[1]):
-                return Path(rr[0])/filename
+                return Url(rr[0])/filename
         raise FileNotFoundError(f'File not found:\n\t{ret}')
 
     def doxygenUrl(self,
-        codeFilename:typing.Union[None,str,Path]=None,
+        codeFilename:typing.Optional[UrlCompatible]=None,
         label:typing.Optional[str]=None
         )->typing.Optional[Url]:
         """
@@ -474,17 +472,17 @@ DoxygenFile=DoxyFile
 Doxyfile=DoxyFile
 
 
-def createDoxyFile(directory:Path,overwriteExisting:bool=False)->Path:
+def createDoxyFile(directory:UrlCompatible,overwriteExisting:bool=False)->Url:
     """
     Create a doxyfile
 
     Returns Path object to the new file
     """
-    directory=directory.absolute()
+    directory=asUrl(directory).absolute()
     doxyFile=directory/'Doxyfile'
-    if not os.path.exists(doxyFile) or overwriteExisting:
-        defaultDoxyfile=Path(__file__).parent/'data'/'Doxyfile'
-        data=defaultDoxyfile.read_text()
+    if not doxyFile.exists or overwriteExisting:
+        defaultDoxyfile=Url(__file__).parent/'data'/'Doxyfile'
+        data=defaultDoxyfile.readString()
         # may as well change the project name while we're at it
         data=data.replace('"My Project"',f'"{directory.name}"',1)
         # add source directory locations
@@ -492,12 +490,12 @@ def createDoxyFile(directory:Path,overwriteExisting:bool=False)->Path:
             str(x).replace('\\','/').replace(' ','\\ ') for x in findDoxygenInputDirs(directory)])
         data=re.sub(r"(INPUT\s+=[ ]*)",r"\1 "+inputs,data,count=1)
         # save over existing file
-        doxyFile.write_text(data)
+        doxyFile.writeString(data)
     return doxyFile
 createDoxyfile=createDoxyFile
 
 
-def cmdline(args):
+def cmdline(args:typing.Iterable[str])->int:
     """
     Run the command line
 

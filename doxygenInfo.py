@@ -7,8 +7,8 @@ TODO: attach to doxygenFile
 """
 import typing
 import subprocess
-from pathlib import Path
 import xml.etree.ElementTree as ET
+from paths import UrlCompatible,Url
 from .doxygenFunctionInfo import DoxygenFunctionInfo
 from .doxygenFileInfo import DoxygenFileInfo
 from .callLocation import CallLocation
@@ -23,16 +23,16 @@ class DoxygenInfo:
     TODO: attach to doxygenFile
     """
     def __init__(self,
-        codeDirectory:typing.Union[str,Path]='.',
-        outputDir=None,
-        forceRescan=False)->Path:
+        codeDirectory:UrlCompatible='.',
+        outputDir:typing.Optional[UrlCompatible]=None,
+        forceRescan=False):
         """ """
-        if not isinstance(codeDirectory,Path):
-            codeDirectory=Path(codeDirectory)
-        self.codeDirectory=codeDirectory.absolute()
+        self.codeDirectory=Url(codeDirectory).absolute()
         if outputDir is None:
             outputDir=self.codeDirectory/"doxygen"
-        self.doxygenOutputDirectory=outputDir.absolute()
+        else:
+            outputDir=Url(outputDir).absolute()
+        self.doxygenOutputDirectory=outputDir
         self._functions:typing.Dict[str,DoxygenFunctionInfo]={}
         self._references:typing.Dict[str,DoxygenFunctionInfo]={}
         self._files:typing.Dict[str,DoxygenFileInfo]={}
@@ -80,14 +80,14 @@ class DoxygenInfo:
         return self._references
 
     @property
-    def xmlFilename(self)->Path:
+    def xmlFilename(self)->Url:
         """
         file that contains info about this function
         """
         return self.doxygenOutputDirectory/'xml'/'index.xml'
 
     @property
-    def xml(self)->ET.Element:
+    def xml(self)->ET.ElementTree[ET.Element[str]]: # pylint: disable=unsubscriptable-object
         """
         XML of the doxygen index
         """
@@ -107,7 +107,11 @@ class DoxygenInfo:
                 continue
             shortFilename=file.attrib['refid']+'.xml'
             xmlFilename=self.doxygenOutputDirectory/'xml'/shortFilename
-            fileInfo=DoxygenFileInfo(self,file.find('name').text,xmlFilename)
+            name=''
+            elements=file.findall('name')
+            if elements and elements[0].text is not None:
+                name=elements[0].text
+            fileInfo=DoxygenFileInfo(self,name,xmlFilename)
             for member in file.findall('member'):
                 refid=member.attrib['refid']
                 kind=member.attrib['kind']
@@ -115,12 +119,15 @@ class DoxygenInfo:
                     if refid in self._references:
                         fn=self._references[refid]
                     else:
-                        name=member.find('name').text
+                        name=''
+                        elements=member.findall('name')
+                        if elements and elements[0].text is not None:
+                            name=elements[0].text
                         fn=DoxygenFunctionInfo(self,name,refid)
                         self._functions[fn.name]=fn
                         self._references[refid]=fn
                     fileInfo.functions[fn.name]=fn
-                    fn.files[fileInfo.name]=fileInfo
+                    fn.files[Url(fileInfo.name)]=fileInfo
 
     @property
     def localUrl(self)->str:
@@ -136,20 +143,20 @@ class DoxygenInfo:
         """
         return self.localUrl
 
-    def rescan(self,forceRescan:bool=True)->Path:
+    def rescan(self,forceRescan:bool=True)->Url:
         """
         Generate doxygen documentation.
 
         returns the path to the generated documentation
         """
-        if self.doxygenOutputDirectory.is_dir() and not forceRescan:
+        if self.doxygenOutputDirectory.isDir and not forceRescan:
             print(f'Doxygen results: "{self.doxygenOutputDirectory}"')
             return self.doxygenOutputDirectory
         self._functions={}
         # Create Doxygen configuration
         self.doxygenOutputDirectory.mkdir(parents=True,exist_ok=True)
         doxyfile=self.doxygenOutputDirectory/'Doxyfile'
-        doxyfile.write_text(f"""
+        doxyfile.writeString(f"""
             OUTPUT_DIRECTORY       = {self.doxygenOutputDirectory}
             GENERATE_XML           = YES
             RECURSIVE              = YES
@@ -158,7 +165,7 @@ class DoxygenInfo:
             HAVE_DOT               = YES
             INPUT                  = {self.codeDirectory}
             QUIET                  = YES
-        """,'utf-8',errors='ignore')
+        """)
         # Run Doxygen
         print("Running doxygen (could take awhile - like 10min)")
         po=subprocess.Popen(["doxygen",str(doxyfile)],

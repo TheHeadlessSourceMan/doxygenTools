@@ -6,8 +6,9 @@ TODO: can add parameters and docstrings
 """
 import typing
 import re
-from pathlib import Path
 import xml.etree.ElementTree as ET
+from paths import (
+    FileLocation, UrlMatchable,urlMatches,Url)
 from .callLocation import CallLocation
 from .doxygenFileInfo import DoxygenFileInfo
 if typing.TYPE_CHECKING:
@@ -27,11 +28,11 @@ class DoxygenFunctionInfo:
         name:str,
         refid:str):
         """ """
-        self.root=root
-        self.parent=root
-        self.name=name
-        self.refid=refid
-        self.files:typing.Dict[str,"DoxygenFileInfo"]={}
+        self.root:"DoxygenInfo"=root
+        self.parent:typing.Union["DoxygenInfo",DoxygenFunctionInfo]=root
+        self.name:str=name
+        self.refid:str=refid
+        self.files:typing.Dict[Url,"DoxygenFileInfo"]={}
         self._parentReferences:typing.List[CallLocation]=[]
 
     def __hash__(self):
@@ -46,11 +47,11 @@ class DoxygenFunctionInfo:
         return False
 
     @property
-    def xmlFilename(self)->Path:
+    def xmlFilename(self)->Url:
         """
         file that contains info about this function
         """
-        return self.bestFile.name
+        return self.bestFile.xmlFilename
 
     @property
     def bestFile(self)->"DoxygenFileInfo":
@@ -60,15 +61,17 @@ class DoxygenFunctionInfo:
         """
         if not self.files:
             f=self.refid.rsplit('_',1)[0]+'.xml'
-            filename=self.root.doxygenOutputDirectory/'xml'/f
+            filename=Url(self.root.doxygenOutputDirectory/'xml'/f)
             fileInfo=DoxygenFileInfo(self.root,'',filename)
             fileInfo.functions[self.name]=self
             self.files[filename]=fileInfo
             return fileInfo
         bestFile=None
         for f in self.files.values():
-            if bestFile is None or bestFile.extension=='.h':
+            if bestFile is None or bestFile.xmlFilename.ext in ('.h','.hpp','.hh','.hxx'):
                 bestFile=f
+        if bestFile is None:
+            raise Exception(f'No file found for function {self.name}')
         return bestFile
     @property
     def file(self)->"DoxygenFileInfo":
@@ -118,17 +121,53 @@ class DoxygenFunctionInfo:
                     else:
                         yield CallLocation(fn,f'{self.filename}:{row}')
 
+    @property
+    def parentReferences(self)->typing.Iterable[CallLocation]:
+        """
+        references to all direct parents off this function call
+        """
+        self.root.calculateFunctionBackreferences()
+        return self._parentReferences
+
     def functionsCallThis(self,
-        ignore:typing.Optional[typing.Set["DoxygenFunctionInfo"]]=None
+        ignoreFunctions:typing.Optional[
+            typing.Iterable[typing.Union["DoxygenFunctionInfo",str,typing.Pattern]]]=None,
+        ignoreFiles:UrlMatchable=None,
+        recursive:bool=False
         )->typing.Iterable["CallLocation"]:
         """
         Functions that call this function
 
         returns [(function, callLocation)]
         """
-        _=ignore
-        self.root.calculateFunctionBackreferences()
-        return self._parentReferences
+        if ignoreFunctions:
+            return self.parentReferences
+        tape=list(self.parentReferences)
+        for callLocation in tape:
+            # first, exclude whatever needs excluding
+            if ignoreFunctions is not None:
+                found=False
+                for ignore in ignoreFunctions:
+                    if isinstance(ignore,str):
+                        if ignore==callLocation.fn.name:
+                            found=True
+                            break
+                    elif isinstance(ignore,DoxygenFunctionInfo):
+                        if ignore.name==callLocation.fn:
+                            found=True
+                            break
+                    else:
+                        if ignore.match(callLocation.fn.name) is not None:
+                            found=True
+                            break
+                if found:
+                    continue
+            # accept that value
+            if ignoreFiles is None or urlMatches(callLocation.location,ignoreFiles):
+                yield callLocation
+            # recurse if necessary
+            if recursive:
+                tape.extend(callLocation.fn.parentReferences)
 
     @property
     def callGraph(self)->"CallGraph":
@@ -140,25 +179,25 @@ class DoxygenFunctionInfo:
         return CallGraph(self)
 
     @property
-    def filename(self)->Path:
+    def filename(self)->Url:
         """
         The source file where this function is implemented
         (full path)
         """
-        return Path(self.getDefinitionLocation(False,False,False))
+        return self.getDefinitionLocation(False,False,False).location
     @property
-    def relativeFilename(self)->Path:
+    def relativeFilename(self)->Url:
         """
         The source file where this function is implemented
         (path relative to the source code base)
         """
-        return self.filename.relative_to(self.root.codeDirectory)
+        return self.filename.relativeTo(self.root.codeDirectory)
 
     def getDeclarationLocation(self,
         includeRow=True,
         includeColumn=True,
         includeSpan=False
-        )->str:
+        )->FileLocation:
         """
         Get source location where this function is declared
 
@@ -169,9 +208,12 @@ class DoxygenFunctionInfo:
         :includeSpan: if possible, include the row span in the filename
             eg foo.c:10-14
         """
+        filename=None
         _=includeSpan
         for element in self.xml:
             loc=element.find('location')
+            if loc is None:
+                continue
             filename=loc.attrib.get('declfile',loc.attrib['file'])
             if includeRow:
                 row=loc.attrib.get('declline',loc.attrib['line'])
@@ -180,13 +222,15 @@ class DoxygenFunctionInfo:
                     filename=f'{filename}:{row}:{col}'
                 else:
                     filename=f'{filename}:{row}'
-        return filename
+        if filename is None:
+            raise Exception(f'No location found for function {self.name}')
+        return FileLocation(filename)
 
     def getDefinitionLocation(self,
         includeRow=True,
         includeColumn=True,
         includeSpan=False
-        )->str:
+        )->FileLocation:
         """
         Get source location where this function is defined
 
@@ -197,9 +241,12 @@ class DoxygenFunctionInfo:
         :includeSpan: if possible, include the row span in the filename
             eg foo.c:10-14
         """
+        filename=None
         _=includeColumn
         for element in self.xml:
             loc=element.find('location')
+            if loc is None:
+                continue
             filename=loc.attrib.get('bodyfile',loc.attrib['file'])
             if includeRow:
                 row=loc.attrib.get('bodystart',loc.attrib['line'])
@@ -211,19 +258,21 @@ class DoxygenFunctionInfo:
                         filename=f'{filename}:{row}'
                 else:
                     filename=f'{filename}:{row}'
-        return filename
+        if filename is None:
+            raise Exception(f'No location found for function {self.name}')
+        return FileLocation(filename)
 
     @property
-    def localUrls(self)->typing.Iterable[typing.Tuple[str,str]]:
+    def localUrls(self)->typing.Iterable[typing.Tuple[Url,Url]]:
         """
         There can be multiple urls, for instance
         if it is c++ there is a .h and a .c file
 
         returns [sourceFilename,htmlUrl]
         """
-        doxygenOutput=doxygenOutput=self.root.doxygenOutputDirectory/'html'
+        doxygenOutput=self.root.doxygenOutputDirectory/'html'
         doxygenOutputFunctions=doxygenOutput/'globals_func.html'
-        data=doxygenOutputFunctions.read_text('utf-8',errors='ignore')
+        data=doxygenOutputFunctions.readString()
         reg=re.compile(
             r'<li>\s*'+self.name+r'\(\)(?P<references>.*?)</li>',
             re.DOTALL)
@@ -233,17 +282,17 @@ class DoxygenFunctionInfo:
         for m in reg.finditer(data):
             references=m.group('references')
             for reference in linkReg.finditer(references):
-                yield (reference.group('filename'),
-                    doxygenOutput/reference.group('url'))
+                url:Url=doxygenOutput/str(reference.group('url'))
+                yield (Url(reference.group('filename')),url)
     @property
-    def urls(self)->typing.Iterable[typing.Tuple[str,str]]:
+    def urls(self)->typing.Iterable[typing.Tuple[Url,Url]]:
         """
         Local urls to the documentation for this function
         """
         return self.localUrls
 
     @property
-    def localUrl(self)->str:
+    def localUrl(self)->Url:
         """
         This will return the most representative url
 
@@ -253,16 +302,17 @@ class DoxygenFunctionInfo:
 
         returns [sourceFilename,htmlUrl]
         """
-        best=''
+        best=None
         bestExt=''
         for codeFilename,url in self.urls:
-            ext=codeFilename.rsplit('.',1)[-1]
             if bestExt.startswith('h') or not best:
                 best=url
-                bestExt=ext
+                bestExt=codeFilename.ext
+        if best is None:
+            raise Exception(f'No local url found for function {self.name}')
         return best
     @property
-    def url(self)->str:
+    def url(self)->Url:
         """
         Local url to the documentation for this function
         """
