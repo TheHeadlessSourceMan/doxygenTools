@@ -8,7 +8,7 @@ TODO: attach to doxygenFile
 import typing
 import subprocess
 import xml.etree.ElementTree as ET
-from paths import UrlCompatible,Url
+from paths import FilePath, UrlCompatible,Url
 from .doxygenFunctionInfo import DoxygenFunctionInfo
 from .doxygenFileInfo import DoxygenFileInfo
 from .callLocation import CallLocation
@@ -32,7 +32,7 @@ class DoxygenInfo:
             outputDir=self.codeDirectory/"doxygen"
         else:
             outputDir=Url(outputDir).absolute()
-        self.doxygenOutputDirectory=outputDir
+        self.doxygenOutputDirectory=FilePath(outputDir)
         self._functions:typing.Dict[str,DoxygenFunctionInfo]={}
         self._references:typing.Dict[str,DoxygenFunctionInfo]={}
         self._files:typing.Dict[str,DoxygenFileInfo]={}
@@ -87,12 +87,12 @@ class DoxygenInfo:
         return self.doxygenOutputDirectory/'xml'/'index.xml'
 
     @property
-    def xml(self)->ET.ElementTree[ET.Element[str]]: # pylint: disable=unsubscriptable-object
+    def xml(self)->ET.Element:
         """
         XML of the doxygen index
         """
         xml=ET.parse(self.xmlFilename)
-        return xml
+        return xml # type: ignore
 
     def _reparseXmlIndex(self):
         """
@@ -130,14 +130,13 @@ class DoxygenInfo:
                     fn.files[Url(fileInfo.name)]=fileInfo
 
     @property
-    def localUrl(self)->str:
+    def localUrl(self)->Url:
         """
         Get the local url of the main doxygen entrypoint
         """
-        doxygenOutput=self.doxygenOutputDirectory/'html'/'index.html'
-        return 'file://'+str(doxygenOutput).replace('\\','//')
+        return self.doxygenOutputDirectory/'html'/'index.html'
     @property
-    def url(self)->str:
+    def url(self)->Url:
         """
         Get the local url of the main doxygen entrypoint
         """
