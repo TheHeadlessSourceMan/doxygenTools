@@ -3,20 +3,18 @@ Where a function is called from
 """
 import typing
 from paths import UrlLocation,UrlLocationCompatible
+from codeTools import FunctionCallLocation
 if typing.TYPE_CHECKING:
     from .doxygenFunctionInfo import DoxygenFunctionInfo
 
 
-class CallLocation:
+class DoxygenCallLocation(FunctionCallLocation):
     """
-    Where a function is called from
+    Where a function is called from according to doxygen
     """
     def __init__(self,
         fn:"DoxygenFunctionInfo",
         location:UrlLocationCompatible):
         """ """
         self.fn:"DoxygenFunctionInfo"=fn
-        self.location:UrlLocation=UrlLocation(location)
-
-    def __repr__(self):
-        return f'{self.fn.name} called from {self.location}'
+        self.location:UrlLocation=UrlLocation(self.fn.name,location)

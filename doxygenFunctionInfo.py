@@ -9,7 +9,7 @@ import re
 import xml.etree.ElementTree as ET
 from paths import (
     FileLocation, UrlMatchable,urlMatches,Url)
-from .callLocation import CallLocation
+from .callLocation import DoxygenCallLocation
 from .doxygenFileInfo import DoxygenFileInfo
 if typing.TYPE_CHECKING:
     from .doxygenInfo import DoxygenInfo
@@ -33,7 +33,7 @@ class DoxygenFunctionInfo:
         self.name:str=name
         self.refid:str=refid
         self.files:typing.Dict[Url,"DoxygenFileInfo"]={}
-        self._parentReferences:typing.List[CallLocation]=[]
+        self._parentReferences:typing.List[DoxygenCallLocation]=[]
 
     def __hash__(self):
         return hash(self.refid)
@@ -99,11 +99,11 @@ class DoxygenFunctionInfo:
 
     def thisCallsFunctions(self,
         ignore:typing.Optional[typing.Set["DoxygenFunctionInfo"]]=None
-        )->typing.Iterable["CallLocation"]:
+        )->typing.Iterable["DoxygenCallLocation"]:
         """
         Functions that this function calls
 
-        returns [(function, callLocation)]
+        returns [(function, DoxygenCallLocation)]
         """
         if ignore is None:
             ignore=set((self,))
@@ -117,12 +117,12 @@ class DoxygenFunctionInfo:
                     ignore.add(fn)
                     row=ref.attrib.get('startline')
                     if not row:
-                        yield CallLocation(fn,self.filename)
+                        yield DoxygenCallLocation(fn,self.filename)
                     else:
-                        yield CallLocation(fn,f'{self.filename}:{row}')
+                        yield DoxygenCallLocation(fn,f'{self.filename}:{row}')
 
     @property
-    def parentReferences(self)->typing.Iterable[CallLocation]:
+    def parentReferences(self)->typing.Iterable[DoxygenCallLocation]:
         """
         references to all direct parents off this function call
         """
@@ -134,11 +134,11 @@ class DoxygenFunctionInfo:
             typing.Iterable[typing.Union["DoxygenFunctionInfo",str,typing.Pattern]]]=None,
         ignoreFiles:UrlMatchable=None,
         recursive:bool=False
-        )->typing.Iterable["CallLocation"]:
+        )->typing.Iterable["DoxygenCallLocation"]:
         """
         Functions that call this function
 
-        returns [(function, callLocation)]
+        returns [(function, DoxygenCallLocation)]
         """
         if ignoreFunctions:
             return self.parentReferences
@@ -163,7 +163,7 @@ class DoxygenFunctionInfo:
                 if found:
                     continue
             # accept that value
-            if ignoreFiles is None or urlMatches(callLocation.location,ignoreFiles):
+            if ignoreFiles is None or urlMatches(callLocation,ignoreFiles):
                 yield callLocation
             # recurse if necessary
             if recursive:
@@ -184,7 +184,7 @@ class DoxygenFunctionInfo:
         The source file where this function is implemented
         (full path)
         """
-        return self.getDefinitionLocation(False,False,False).location
+        return self.getDefinitionLocation(False,False,False).url
     @property
     def relativeFilename(self)->Url:
         """
