@@ -9,9 +9,9 @@ import typing
 import subprocess
 import xml.etree.ElementTree as ET
 from paths import FilePath,UrlCompatible,Url
-from codeTools import CallLocation
 from .doxygenFunctionInfo import DoxygenFunctionInfo
 from .doxygenFileInfo import DoxygenFileInfo
+from .callLocation import DoxygenCallLocation
 
 
 class DoxygenInfo:
@@ -51,7 +51,7 @@ class DoxygenInfo:
             for fn in self.functions.values():
                 for fnCall in fn.thisCallsFunctions():
                     fnCall.fn._parentReferences.append( # noqa: E501; pylint: disable=protected-access
-                        CallLocation(fn,fnCall.location))
+                        DoxygenCallLocation(fn,fnCall.location))
             self._functionBackreferencesCalculated=True
 
     @property

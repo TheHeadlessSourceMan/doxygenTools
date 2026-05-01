@@ -7,8 +7,9 @@ TODO: can add parameters and docstrings
 import typing
 import re
 import xml.etree.ElementTree as ET
+from backup_plan import asFilePath
 from paths import (
-    FileLocation, UrlMatchable,urlMatches,Url)
+    UrlMatchable,urlMatches,Url)
 from codeTools import FunctionDeclaration,FunctionDefinition
 from .callLocation import DoxygenCallLocation
 from .doxygenFileInfo import DoxygenFileInfo
@@ -35,7 +36,7 @@ class DoxygenFunctionInfo:
         self.refid:str=refid
         self.files:typing.Dict[Url,"DoxygenFileInfo"]={}
         self._parentReferences:typing.List[DoxygenCallLocation]=[]
-        self._declrarion:typing.Optional[FunctionDeclaration]=None
+        self._declaration:typing.Optional[FunctionDeclaration]=None
         self._definition:typing.Optional[FunctionDefinition]=None
 
     def __hash__(self):
@@ -166,7 +167,7 @@ class DoxygenFunctionInfo:
                 if found:
                     continue
             # accept that value
-            if ignoreFiles is None or urlMatches(callLocation,ignoreFiles):
+            if ignoreFiles is None or urlMatches(callLocation.url,ignoreFiles):
                 yield callLocation
             # recurse if necessary
             if recursive:
@@ -194,7 +195,7 @@ class DoxygenFunctionInfo:
         The source file where this function is implemented
         (path relative to the source code base)
         """
-        return self.filename.relativeTo(self.root.codeDirectory)
+        return asFilePath(self.filename).getRelativeFrom(self.root.codeDirectory)
 
     def getDeclarationLocation(self,
         includeRow=True,
