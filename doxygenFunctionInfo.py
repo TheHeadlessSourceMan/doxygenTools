@@ -9,6 +9,7 @@ import re
 import xml.etree.ElementTree as ET
 from paths import (
     FileLocation, UrlMatchable,urlMatches,Url)
+from codeTools import FunctionDeclaration,FunctionDefinition
 from .callLocation import DoxygenCallLocation
 from .doxygenFileInfo import DoxygenFileInfo
 if typing.TYPE_CHECKING:
@@ -34,6 +35,8 @@ class DoxygenFunctionInfo:
         self.refid:str=refid
         self.files:typing.Dict[Url,"DoxygenFileInfo"]={}
         self._parentReferences:typing.List[DoxygenCallLocation]=[]
+        self._declrarion:typing.Optional[FunctionDeclaration]=None
+        self._definition:typing.Optional[FunctionDefinition]=None
 
     def __hash__(self):
         return hash(self.refid)
@@ -197,7 +200,7 @@ class DoxygenFunctionInfo:
         includeRow=True,
         includeColumn=True,
         includeSpan=False
-        )->FileLocation:
+        )->FunctionDeclaration:
         """
         Get source location where this function is declared
 
@@ -208,29 +211,38 @@ class DoxygenFunctionInfo:
         :includeSpan: if possible, include the row span in the filename
             eg foo.c:10-14
         """
-        filename=None
-        _=includeSpan
-        for element in self.xml:
-            loc=element.find('location')
-            if loc is None:
-                continue
-            filename=loc.attrib.get('declfile',loc.attrib['file'])
-            if includeRow:
-                row=loc.attrib.get('declline',loc.attrib['line'])
-                if includeColumn:
-                    col=loc.attrib.get('declcolumn',loc.attrib['column'])
-                    filename=f'{filename}:{row}:{col}'
-                else:
-                    filename=f'{filename}:{row}'
-        if filename is None:
-            raise Exception(f'No location found for function {self.name}')
-        return FileLocation(filename)
+        if self._declaration is None:
+            filename=None
+            _=includeSpan
+            for element in self.xml:
+                loc=element.find('location')
+                if loc is None:
+                    continue
+                filename=loc.attrib.get('declfile',loc.attrib['file'])
+                if includeRow:
+                    row=loc.attrib.get('declline',loc.attrib['line'])
+                    if includeColumn:
+                        col=loc.attrib.get('declcolumn',loc.attrib['column'])
+                        filename=f'{filename}:{row}:{col}'
+                    else:
+                        filename=f'{filename}:{row}'
+            if filename is None:
+                raise Exception(f'No location found for function {self.name}')
+            self._declaration=FunctionDeclaration(filename)
+            self._declaration.definition=self.definition
+        return self._declaration
+    @property
+    def declaration(self)->FunctionDeclaration:
+        """
+        Get source location where this function is declared
+        """
+        return self.getDeclarationLocation()
 
     def getDefinitionLocation(self,
         includeRow=True,
         includeColumn=True,
         includeSpan=False
-        )->FileLocation:
+        )->FunctionDefinition:
         """
         Get source location where this function is defined
 
@@ -241,26 +253,35 @@ class DoxygenFunctionInfo:
         :includeSpan: if possible, include the row span in the filename
             eg foo.c:10-14
         """
-        filename=None
-        _=includeColumn
-        for element in self.xml:
-            loc=element.find('location')
-            if loc is None:
-                continue
-            filename=loc.attrib.get('bodyfile',loc.attrib['file'])
-            if includeRow:
-                row=loc.attrib.get('bodystart',loc.attrib['line'])
-                if includeSpan:
-                    endRow=loc.attrib.get('bodyend',row)
-                    if row!=endRow:
-                        filename=f'{filename}:{row}-{endRow}'
+        if self._definition is None:
+            filename=None
+            _=includeColumn
+            for element in self.xml:
+                loc=element.find('location')
+                if loc is None:
+                    continue
+                filename=loc.attrib.get('bodyfile',loc.attrib['file'])
+                if includeRow:
+                    row=loc.attrib.get('bodystart',loc.attrib['line'])
+                    if includeSpan:
+                        endRow=loc.attrib.get('bodyend',row)
+                        if row!=endRow:
+                            filename=f'{filename}:{row}-{endRow}'
+                        else:
+                            filename=f'{filename}:{row}'
                     else:
                         filename=f'{filename}:{row}'
-                else:
-                    filename=f'{filename}:{row}'
-        if filename is None:
-            raise Exception(f'No location found for function {self.name}')
-        return FileLocation(filename)
+            if filename is None:
+                raise Exception(f'No location found for function {self.name}')
+            self._definition=FunctionDefinition(filename)
+            self._definition.declaration=self.definition
+        return self._definition
+    @property
+    def definition(self)->FunctionDefinition:
+        """
+        Get source location where this function is defined
+        """
+        return self.getDefinitionLocation()
 
     @property
     def localUrls(self)->typing.Iterable[typing.Tuple[Url,Url]]:

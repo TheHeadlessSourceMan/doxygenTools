@@ -8,10 +8,10 @@ TODO: attach to doxygenFile
 import typing
 import subprocess
 import xml.etree.ElementTree as ET
-from paths import FilePath, UrlCompatible,Url
+from paths import FilePath,UrlCompatible,Url
+from codeTools import CallLocation
 from .doxygenFunctionInfo import DoxygenFunctionInfo
 from .doxygenFileInfo import DoxygenFileInfo
-from .callLocation import CallLocation
 
 
 class DoxygenInfo:
