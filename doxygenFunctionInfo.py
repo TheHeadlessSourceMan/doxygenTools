@@ -7,9 +7,8 @@ TODO: can add parameters and docstrings
 import typing
 import re
 import xml.etree.ElementTree as ET
-from backup_plan import asFilePath
 from paths import (
-    UrlMatchable,urlMatches,Url)
+    UrlMatchable,urlMatches,Url,asFilePath)
 from codeTools import FunctionDeclaration,FunctionDefinition
 from .callLocation import DoxygenCallLocation
 from .doxygenFileInfo import DoxygenFileInfo
